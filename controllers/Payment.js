@@ -45,7 +45,7 @@ export async function payment(req, res) {
     }
 }
 export async function success(req, res) {
-    console.log("iheebb");
+    console.log("iheeeeeb");
     // Extracting 'amount' parameter from request URL
     const amount = req.params.amount;
  const userid = req.params.userid;
