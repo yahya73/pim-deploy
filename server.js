@@ -23,6 +23,8 @@ import reelRoutes from "./routes/reelRoutes.js";
 import reportRoute from "./routes/reportRoutes.js" 
 import MarketRoute from "./routes/market.route.js" ;
 import TaskRoutes from './routes/taskRoutes.js';
+import cron from 'node-cron';
+import { sendAiQuizes } from './controllers/taskController.js'
 
 
 // Creating an express app
@@ -93,6 +95,8 @@ app.use('/api',reportRoute);
 app.use('/api',MarketRoute);
 app.use('/task', TaskRoutes);
 
+//scheduler
+cron.schedule('0 0 * * *', sendAiQuizes);
 
 // Using custom middleware for handling 404 errors
 app.use(notFoundError);

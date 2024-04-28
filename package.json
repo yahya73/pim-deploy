@@ -16,6 +16,7 @@
   },
   "dependencies": {
     "@ethersproject/hdnode": "^5.7.0",
+    "@google/generative-ai": "^0.7.0",
     "@hashgraph/sdk": "^2.41.0",
     "axios": "^1.6.7",
     "bcrypt": "^5.1.1",
@@ -32,6 +33,7 @@
     "mongoose": "^8.0.3",
     "morgan": "^1.10.0",
     "multer": "^1.4.5-lts.1",
+    "node-cron": "^3.0.3",
     "nodemailer": "^6.9.9",
     "socket.io": "^4.7.4"
   }
