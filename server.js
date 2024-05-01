@@ -82,7 +82,7 @@ app.use("/img", express.static("public/images"));
 app.use('/WishList', WishlistRoutes);
 // Importing the routes for the 'tests' resource
 app.use("/partenaire", PartenaireRoutes);
-app.use("/api", ParentRoutes);
+app.use('/parent', ParentRoutes);
 app.use("/chat", chatRoutes);
  app.use("/", userRoutes);
 app.use('/api', Routes);
