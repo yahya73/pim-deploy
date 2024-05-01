@@ -5,9 +5,11 @@ const router = express.Router();
 
 import { registerParent, getAccountDetails, verifyEmail, getChildTransactionHistory, forgetKeys } from '../controllers/parentController.js'
 
-router.post('/register', registerParent);
+router.route('/register')
+.post(registerParent);
+
 router.get('/blockchainAccount', getAccountDetails);
-router.get('/verifyEmail/:email', verifyEmail)
+router.get('/verifyEmail/:email', verifyEmail);
 
 //get child's transactions 
 router.get('/transactions/child/:parentId', getChildTransactionHistory);
