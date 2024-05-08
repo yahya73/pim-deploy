@@ -55,6 +55,17 @@ prohibitedProductTypes:{
     banned: {
         type: Boolean, // Define Banned as a single boolean value
         default: false // Default value is false (user is not banned by default)
+    }, 
+    fcmtokens: {
+        type: [String], // Array of strings to store FCM tokens
+    },
+    first_time: {
+        type: Boolean,
+        required: false
+    },
+    rfid_tag: {
+        type: String,
+        required: false
     }
 
 });

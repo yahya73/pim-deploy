@@ -299,7 +299,7 @@ export async function activateAi(req, res) {
   }
 
   export async function getKids(req, res) {
-    const parentUsername = req.body.parentusername;
+    const parentUsername = req.body.parentUsername;
 
     try {
         // Find the parent user by username

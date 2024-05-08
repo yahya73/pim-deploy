@@ -1,48 +1,49 @@
 import { validationResult } from 'express-validator';
-import Product from "../models/Product.js";
-import {sendNotification} from "./notificationController.js"
+import Product from "../models/product.js";
+import {sendNotification,sendPaymentNotification,sendNotificationReact} from "./notificationController.js"
+import User from '../models/User.js'; // Replace with the correct path to your User model file
 
+import productTypes from '../models/productTypes.js';
+import product from '../models/product.js';
 
-// Controller function to create a new product
-// Controller function to create a new product
-export function addOnce(req, res) {
-    // Check if there are validation errors
+export async function addOnce(req, res) {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
-        // Respond with 400 Bad Request and the validation errors
         return res.status(400).json({ errors: errors.array() });
     } else {
-        // If there are no validation errors, create a new product
+        // Create the product
         Product.create({
-            // Extracting product details from the request body
-            SellerId: req.body.SellerId,
-            ProductName: req.body.ProductName,
-            image:req.body.image,
-            Description: req.body.Description,
-            Price: req.body.Price,
-            Type: req.body.Type
+            sellerId: req.body.SellerId,
+            productName: req.body.ProductName,
+            image: req.body.Image,
+            description: req.body.Description,
+            price: req.body.Price,
+            type: req.body.Type
         })
             .then((newProduct) => {
-                // Respond with 201 Created and the created product details
                 res.status(201).json({
-                    SellerId: newProduct.SellerId,
-                    ProductName: newProduct.ProductName,
-
-                    Description: newProduct.Description,
-                    Price: newProduct.Price,
-                    Type: newProduct.Type
+                    SellerId: newProduct.sellerId,
+                    ProductName: newProduct.productName,
+                    Description: newProduct.description,
+                    Price: newProduct.price,
+                    Type: newProduct.type
                 });
             })
             .catch((err) => {
-                console.log(err)
-                // Respond with 500 Internal Server Error and the error details
+                console.log(err);
                 res.status(500).json({ error: err });
             });
     }
 }
 
+export async function getAllProductTypes(req, res) {
+    const types = await productTypes.find();
+    res.status(200).json({ productTypes: types });
+}
+
 // Controller function to get all products
 export function getAll(req, res) {
+    
     // Retrieve all products from the database
     Product.find()
         .then((products) => {
@@ -74,19 +75,66 @@ export function getOneById(req, res) {
 }
 // Controller function to delete a product by ID
 
+export async function readnfc(req, res) {
+    try {
+        const { id, products, sellerId, amount } = req.body;
+        
+        // Find the user by rfid_tag
+        const child = await User.findOne({ rfid_tag: id });
+        const user = await User.findById(child.parentid);
+        
+        if (!user) {
+            return res.status(404).json({ error: "User not found" });
+        }
 
+        // Check if the user has fcmtokens
+        if (!user.fcmtokens || user.fcmtokens.length === 0) {
+            return res.status(404).json({ error: "FCM tokens not found for the user" });
+        }
+
+        // Call the sendPaymentNotification function with the user's fcmtokens
+        await sendPaymentNotification(user.fcmtokens,products,sellerId,amount);
+
+        // Send success response
+        res.status(200).json({ message: "Payment notification sent successfully" });
+    } catch (error) {
+        console.error("Error sending payment notification:", error);
+        res.status(500).json({ error: "Internal server error" });
+    }
+}
 export async function deleteProduct(req, res) {
     try {
+        // Find the product and retrieve the sellerId
+        const product = await Product.findById(req.params.id);
+        if (!product) {
+            return res.status(404).json({ message: 'Product not found' });
+        }
+        const sellerId = product.sellerId;
+
+        // Delete the product
         const deletedProduct = await Product.findByIdAndDelete(req.params.id);
         if (!deletedProduct) {
             return res.status(404).json({ message: 'Product not found' });
         }
+
+        // Find the user associated with the sellerId
+        const user = await User.findById(sellerId);
+        if (!user) {
+            return res.status(404).json({ message: 'User not found' });
+        }
+
+        // Retrieve FCM tokens from the user
+        const tokens = user.fcmtokens || [];
+
         const message = {
             title: 'Product Deleted',
             body: `The product ${deletedProduct.productName} has been deleted`,
         };
-        const token = global.tokendevice;
-        await sendNotification(message, token);
+
+        // Send notification to FCM tokens
+        //sendPaymentNotification(tokens);
+        // await sendNotification(message, tokens);
+        await sendNotificationReact(message,tokens,sellerId);
         res.status(200).json({ message: 'Product deleted successfully' });
     } catch (err) {
         console.log(err);
@@ -94,9 +142,19 @@ export async function deleteProduct(req, res) {
     }
 }
 
+
 const addProduct = async (req, res) => {
     try {
         const product = await Product.create(req.body);
+        // Check if the product type exists
+        const productType = await productTypes.findOne({ type: req.body.type });
+        console.log(productType)
+        console.log("product type")
+        if (!productType) {
+            // If product type doesn't exist, create it
+            console.log("added product type")
+            await productTypes.create({ type: req.body.type });
+        }
         res.status(201).json(product);
     } catch (error) {
         console.log(error);

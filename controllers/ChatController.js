@@ -1,6 +1,7 @@
 import Chat from "../models/chat.js";
 import Room from "../models/Room.js";
 import { io } from "../server.js";
+import User from '../models/User.js';
 
 export async function sendMessage(req, res) {
     try {
@@ -13,6 +14,8 @@ export async function sendMessage(req, res) {
             image,
             room_id // Add room_id to the chat message
         });
+
+        console.log(newChatMessage)
 
         // Save the chat message to the database
         await newChatMessage.save();
@@ -32,15 +35,10 @@ export async function sendMessage(req, res) {
 
 export async function getRoomMessages(req, res) {
     try {
-        const { room_id } = req.query; // Consider using query parameters for pagination
-        const limit = parseInt(req.query.limit, 10) || 10; // Default to 10 if not specified
-        const offset = parseInt(req.query.offset, 10) || 0; // Default to 0 if not specified
+        const { room_id } = req.query;
 
-        // Fetch messages for the specified room with pagination
-        const roomMessages = await Chat.find({ room_id })
-            .skip(offset) // Skip the first `offset` documents
-            .limit(limit) // Limit the results to `limit` documents
-            .exec();
+        // Fetch messages for the specified room without pagination
+        const roomMessages = await Chat.find({ room_id }).exec();
 
         res.status(200).json(roomMessages);
     } catch (error) {
@@ -48,6 +46,7 @@ export async function getRoomMessages(req, res) {
         res.status(500).json({ error: error.message });
     }
 }
+
 
 
 export async function getRooms(req, res) {
@@ -71,7 +70,7 @@ export async function getRooms(req, res) {
 
 export async function createRoom(req, res) {
     try {
-        const { buyer_username, seller_username } = req.body;
+        const { buyer_username, seller_id } = req.body;
 
         // Generate a random room_id between 1000 and 9999
         let room_id;
@@ -85,11 +84,17 @@ export async function createRoom(req, res) {
             }
         }
 
-        // Create a new room
+        // Find the seller user based on the seller_id
+        const sellerUser = await User.findById(seller_id);
+        if (!sellerUser) {
+            return res.status(404).json({ error: "Seller not found" });
+        }
+
+        // Create a new room with buyer_username and seller_username
         const newRoom = new Room({
             room_id,
             buyer_username,
-            seller_username
+            seller_username: sellerUser.username // Use the seller's username
         });
 
         // Save the room to the database

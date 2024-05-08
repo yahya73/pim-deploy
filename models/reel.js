@@ -1,19 +1,9 @@
 import mongoose from "mongoose";
-
+import Like from "./likes.js";
 const { Schema, model } = mongoose;
 
-const likeSchema = new mongoose.Schema({
-    userId: {
-        type: String,
-        required: true,
-    },
-    reelId: {
-        type: String,
-        required: true,
-    },
-});
 
-const Like = mongoose.model('Like', likeSchema);
+
 
 const commentSchema = new mongoose.Schema({
     comment: { type: String, required: true },
@@ -26,7 +16,7 @@ const Comment = mongoose.model('Comment', commentSchema);
 
 const reelSchema = new mongoose.Schema({
     url: { type: String, required: true },
-    likeCount: [likeSchema],
+    likeCount: [Like.schema],
     userName: { type: String, required: true },
     profileUrl: { type: String },
     reelDescription: { type: String },

@@ -16,8 +16,6 @@ router.post('/send', [
 // Route to get messages for a specific room
 router.get('/getRoomMessages', [
     query('room_id').notEmpty(), // Validate room_id in the query string
-    query('limit').optional().isInt({ min: 1 }), // Validate limit as an optional integer greater than 0
-    query('offset').optional().isInt({ min: 0 }) // Validate offset as an optional integer greater than or equal to 0
 ], getRoomMessages);
 
 // Route to get rooms for a specific user

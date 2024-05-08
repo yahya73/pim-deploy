@@ -76,14 +76,14 @@ export async function transfertochild(req, res) {
  const parentid = req.body.parentid;
  const childusername = req.body.childusername;
  const cryptedkey = req.body.cryptedkey;
- const iv = req.body.iv;
+ 
     // Logging the value of 'amount' to the console
     console.log(cryptedkey);
-    console.log(iv);
+   
      const parent = await User.findById(parentid);
      const key =  await transformString(parent.username);
-     console.log(key);
-     const decrypted =  decryptText(cryptedkey,iv,key);
+    
+     const decrypted =  decryptText(cryptedkey,key);
      const prvkey = PrivateKey.fromString(decrypted);
     await User.findOne( { username : childusername}).then( async (user) => {
         console.log(user.adressblockchain)

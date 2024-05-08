@@ -1,8 +1,15 @@
 import User from "../models/User.js";
 import bcrypt from 'bcrypt';
 import {validationResult} from "express-validator";
-import {generateKeysFromMnemonic} from './parentController.js'
+import {sendNotificationReact} from "./notificationController.js"
 
+import {generateKeysFromMnemonic,transferNft} from './parentController.js'
+import identifiers from "../models/identifiers.js";
+import bip39 from 'bip39';
+import hdkey from 'hdkey';
+import {
+    HDNode as ethersHdNode,
+} from '@ethersproject/hdnode';
 import {
     AccountId,
     PrivateKey,
@@ -18,7 +25,7 @@ import {
   import { createCipheriv, createDecipheriv, randomBytes } from 'crypto';
   const accountIdString = process.env.ACCOUNT_ID;
 const privateKeyString = process.env.ACCOUNT_PRIVATE_KEY;
-const tokenId = process.env.TOKEN_ID
+const tokenId = process.env.TOKEN_ID;
 if (accountIdString === undefined || privateKeyString === undefined) { throw new Error('account id and private key in env file are empty') }
 
 const operatorAccountId = AccountId.fromString(accountIdString);
@@ -26,39 +33,51 @@ const operatorPrivateKey = PrivateKey.fromString(privateKeyString);
 
 const client = Client.forTestnet().setOperator(operatorAccountId, operatorPrivateKey);
 import nodemailer from 'nodemailer';
+
 export async function signin(req, res) {
-  const { identifier, password } = req.body;
-
-  try {
-    console.log('Identifier:', identifier);
-    console.log('password:', password);
-
-    // Determine if the identifier is an email or a username
-    let user = await User.findOne({
-      $or: [
-        { "email": identifier },
-        { "username": identifier }
-      ]
-    });
-
-    console.log('User:', user);
-
-    if (!user) {
-      return res.status(404).json({ error: "User not found" });
+    const { identifier, password, fcmtoken } = req.body;
+  
+    try {
+      console.log('Identifier:', identifier);
+      console.log('password:', password);
+      console.log('fcmtoken:', fcmtoken);
+  
+      // Determine if the identifier is an email or a username
+      let user = await User.findOne({
+        $or: [
+          { "email": identifier },
+          { "username": identifier }
+        ]
+      });
+  
+      console.log('User:', user);
+  
+      if (!user) {
+        return res.status(404).json({ error: "User not found" });
+      }
+  
+      const isValidPassword = await bcrypt.compare(password, user.password);
+      if (!isValidPassword) {
+        return res.status(401).json({ error: "Invalid password" });
+      }
+  
+      // Check if fcmtoken exists and is not already in the array
+      if (fcmtoken && !user.fcmtokens.includes(fcmtoken)) {
+        user.fcmtokens.push(fcmtoken); // Add fcmtoken to the array
+      }
+      if (user.fcmtokens.includes(fcmtoken)) {
+        console.log("token already exists"); // Add fcmtoken to the array
+      } 
+  
+      // Save the updated user object
+      await user.save();
+  
+      res.status(200).json(user);
+    } catch (error) {
+      console.error('Error:', error);
+      res.status(500).json({ error: error.message });
     }
-
-    const isValidPassword = await bcrypt.compare(password, user.password);
-    if (!isValidPassword) {
-      return res.status(401).json({ error: "Invalid password" });
-    }
-console.log(user)
-    res.status(200).json(user);
-  } catch (error) {
-    console.error('Error:', error);
-    res.status(500).json({ error: error.message });
   }
-}
-
 
 export function updateOnce(req, res) {
   // Check if there are validation errors
@@ -205,42 +224,27 @@ export function unbanUser(req, res) {
 export async function createchildinblockchain(){
     
     console.log('- Creating a new account...\n');
-   /* const privateKey = PrivateKey.generateECDSA();
-      console.log("private"+privateKey);
-    const publicKey = privateKey.publicKey;*/
-    // Assuming that the target shard and realm are known.
-    // For now they are virtually always 0 and 0.
     const mnemonic = await Mnemonic.generate12();
-  
-    const { privateKey, publicKey } = await  generateKeysFromMnemonic(mnemonic);
-   
-    const aliasAccountId = publicKey.toAccountId(0, 0);
+    console.log(mnemonic._mnemonic.toString())
+    const hdNodeRoot = ethersHdNode.fromMnemonic(mnemonic._mnemonic.toString());
+    const accountHdPath = `m/44'/60'/0'/0/0`;
+    const hdNode = hdNodeRoot.derivePath(accountHdPath);
+    const privateKey = PrivateKey.fromStringECDSA(hdNode.privateKey);
+    
+    const aliasAccountId = privateKey.publicKey.toAccountId(0, 0);
     console.log(`- New account ID: ${aliasAccountId.toString()}`);
     if (aliasAccountId.aliasKey === null) {
         throw new Error('alias key is empty');
     }
-    console.log(`- Just the aliasKey: ${aliasAccountId.aliasKey.toString()}\n`);
-    /**
-     * Step 4
-     *
-     * Transfer the fungible token to the public key alias
-     */
-    console.log('- Transferring the fungible tokens...\n');
-    await sendToken(client, tokenId, operatorAccountId, aliasAccountId, 1, operatorPrivateKey);
-    /**
-     * Step 5
-     *
-     * Return the new account ID in the child record
-     */
+    await sendToken(client, tokenId, operatorAccountId, aliasAccountId, 2, operatorPrivateKey);
     const accountId =await getAccountIdByAlias(client, aliasAccountId);
     console.log(`The normal account ID of the given alias: ${accountId}`);
-    /**
-   * Step 6
-   *
-   * Show the new account ID owns the fungible token
-   */
-  
-    return { privateKey ,accountId };
+    console.log(privateKey.toString())
+    console.log(mnemonic)
+    const privateString = privateKey.toString();
+    const mnemonicString = mnemonic._mnemonic.toString()
+    const acountIdString = accountId.toString();
+    return({ privateString ,acountIdString, mnemonicString })
 }
 
 
@@ -249,32 +253,42 @@ export  async function createChild(req, res) {
     const child = req.body;
     child.role="child"
     try {
-      const {privateKey, accountId} =  await  createchildinblockchain();
-      
-      child.adressblockchain = accountId.toString();
+      const {privateString ,acountIdString} =  await  createchildinblockchain();
+      console.log("private"+privateString);
+      child.adressblockchain = acountIdString;
       const hashedPassword = await bcrypt.hash(child.password, 10);
       child.password = hashedPassword;
+       //702016452439
+      const identifier = await  identifiers.findOne({nfc_id :child.rfid_tag});
+      console.log(identifier)
+       if(identifier){
+        await transferNft( identifier.nft_id, client, acountIdString, privateString);
         const childcreated = await User.create(child);
         
-      const key =  await transformString(childcreated.username);
-       const encrypted = encryptText(privateKey,key);
+        const key =  await transformString(childcreated.username);
+         const encrypted = encryptText(privateString,key);
+         console.log(encrypted.encryptedText);
+         const decrypted =  decryptText(encrypted.encryptedText,key);
+          res.status(200).json({
+              
+              encrypted:encrypted.encryptedText,
+              
+              
+          });
+       }
+
        
-       const decrypted =  decryptText(encrypted.encryptedText,encrypted.iv,key);
-        res.json({
-            key:key,
-            encrypted:encrypted.encryptedText,
-            privatekey:privateKey.toString(),
-            decrypted :decrypted,
-            iv:encrypted.iv
-        });
    
     } catch (error) {
         throw new Error('Error creating child user'+ error);
     }
 }
     export async function getusersolde(req,res){
+        try {
+            //
         let username= req.params.username;
        let user= await User.findOne( { username : username});
+      
         const query = new AccountBalanceQuery().setAccountId(user.adressblockchain);
 
         //Sign with the client operator account private key and submit to a Hedera network
@@ -282,13 +296,23 @@ export  async function createChild(req, res) {
         
         console.log(accountBalance.tokens._map.get("0.0.3567431").low);
         res.status(200).json(accountBalance.tokens._map.get("0.0.3567431").low);
+        }catch(error){
+            console.log(error);
+            res.status(404).json(1);
+        }
     }
 // Function to get all children by parent ID
 export  async function getAllChildrenByParentId(req, res) {
     try {
         const children = await User.find({ parentid: req.params.parentid, role: 'child' });
-      
+      console.log("children");
+      console.log(children);
+      if(children != 0){
         res.json(children)
+      }
+      else{
+        res.status(204).json(children);
+      }
     } catch (error) {
         throw new Error('Error fetching children');
     }
@@ -313,7 +337,7 @@ export async function deleteChildById(req, res) {
         throw new Error('Error deleting child');
     }
 }
-async function getAccountIdByAlias (client, aliasAccountId){
+export async function getAccountIdByAlias (client, aliasAccountId){
     const accountInfo = await new AccountInfoQuery()
         .setAccountId(aliasAccountId)
         .execute(client);
@@ -403,12 +427,14 @@ export function encryptText(text, key) {
         } 
        
    //     const data =  Buffer.from(text);
-    const iv = randomBytes(16); // Generate a random initialization vector
+    var iv = Buffer.from(process.env.IV, 'hex');
+    
+  // Generate a random initialization vector
     const cipher = createCipheriv('aes-256-cbc', keybytes, iv);
     let encryptedText = cipher.update(text.toString(), 'utf8', 'hex');
     encryptedText += cipher.final('hex');
     
-    return { iv: iv.toString('hex'), encryptedText:encryptedText };
+    return {  encryptedText:encryptedText };
     }catch(error){
         console.log("ppppp"+error)
     }
@@ -416,7 +442,8 @@ export function encryptText(text, key) {
 }
 
 // Function to decrypt an encrypted string using a key and initialization vector (iv)
-export function decryptText(encryptedText, iv, key) {
+export function decryptText(encryptedText,key) {
+    var iv = Buffer.from(process.env.IV, 'hex');
   let  keybytes = Buffer.from(key, 'utf-8');
     if (keybytes.length > 32) {
         // Truncate the key if it's longer than 32 bytes
@@ -513,6 +540,47 @@ const resetPassword = async (req, res) => {
     return res.status(500).json({ error: 'Internal server error' });
   }
 };
+export const resetPasswordFirsttime = async (req, res) => {
+  const { email, newPassword } = req.body;
+ console.log(email);
+  try {
+    // Find the user by email
+    const user = await User.findOne({email :email});
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+   
+    // Hash the new password
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+     const {privateString ,acountIdString,mnemonicString} =  await  createchildinblockchain();
+     user.adressblockchain = acountIdString;
+     const key =  await transformString(user.username);
+     const encrypted = encryptText(privateString,key);
+     console.log(encrypted.encryptedText);
+     const decrypted =  decryptText(encrypted.encryptedText,key);
+    // Update the user's password in the database
+    user.password = hashedPassword;
+    user.first_time = false;
+    await user.save();
+     
+    return res.status(200).json({    encrypted:encrypted.encryptedText , mnemonic:mnemonicString});
+  } catch (error) {
+    console.error('Error resetting password:', error);
+    return res.status(500).json({ error: 'Internal server error' });
+  }
+};
 
+export async function paymentnotification(req, res){
+  try {
+      const { notification, iduser ,owner, aliasAccountId,sendBalance,treasuryAccPvKey} = req.body;
+await sendToken(client, tokenId, owner, aliasAccountId, sendBalance, treasuryAccPvKey) 
+      // Call sendNotificationReact function
+      await sendNotificationReact(notification, iduser);
 
+      res.status(200).json({ message: 'Notification sent successfully' });
+  } catch (error) {
+      console.error('Error sending notification:', error);
+      res.status(500).json({ error: 'Failed to send notification' });
+  }
+}
 export { sendPasswordResetEmail,resetPassword };
